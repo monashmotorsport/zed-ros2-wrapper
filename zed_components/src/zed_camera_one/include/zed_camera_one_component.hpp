@@ -246,6 +246,7 @@ private:
 
   // ----> Debug variables
   bool _debugCommon = false;
+  bool _debugDynParams = false;
   bool _debugVideoDepth = false;
   bool _debugSensors = false;
   bool _debugCamCtrl = false;
@@ -372,6 +373,9 @@ private:
   bool _publishSensTemp = false;
 
   std::string _svoFilepath = "";
+#if (ZED_SDK_MAJOR_VERSION * 10 + ZED_SDK_MINOR_VERSION) >= 53
+  std::string _svoDecryptionKey = "";
+#endif
   bool _svoLoop = false;
   bool _svoRealtime = false;
   int _svoFrameStart = 0;
@@ -382,6 +386,7 @@ private:
   std::string _streamAddr = "";      // Address for local streaming input
   int _streamPort = 10000;
 
+  bool _changeThreadSched = false;
   std::string _threadSchedPolicy;
   int _threadPrioGrab;
   int _threadPrioSens;
@@ -427,7 +432,7 @@ private:
   // ----> Running status
   bool _debugMode = false;  // Debug mode active?
   bool _svoMode = false;        // Input from SVO?
-  bool _svoPause = false;       // SVO pause status
+  std::atomic<bool> _svoPause{false};  // SVO pause status
   int _svoFrameId = 0;          // Current SVO frame ID
   int _svoFrameCount = 0;     // Total number of frames in SVO
   bool _streamMode = false;     // Expecting local streaming data?
