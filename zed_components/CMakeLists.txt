@@ -81,7 +81,6 @@ endif()
 
 #############################################
 # Dependencies
-find_package(nlohmann_json REQUIRED)
 find_package(ZED REQUIRED)
 
 exec_program(uname ARGS -p OUTPUT_VARIABLE CMAKE_SYSTEM_NAME2)
@@ -136,6 +135,7 @@ find_package(nmea_msgs REQUIRED)
 find_package(geographic_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(stereo_msgs REQUIRED)
+find_package(backward_ros REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
@@ -143,9 +143,6 @@ find_package(diagnostic_updater REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(shape_msgs REQUIRED)
 find_package(robot_localization REQUIRED)
-
-# Debug
-find_package(backward_ros REQUIRED)
 
 # Check ISAAC ROS Nitros availability
 find_package(isaac_ros_common QUIET)
@@ -191,7 +188,7 @@ endif()
 ###############################################################################
 #Add all files in subdirectories of the project in
 # a dummy_target so qtcreator have access to all files
-file(GLOB_RECURSE all_files ${CMAKE_CURRENT_SOURCE_DIR}/*)
+file(GLOB_RECURSE all_files ${CMAKE_SOURCE_DIR}/*)
 add_custom_target(all_${PROJECT_NAME}_files SOURCES ${all_files})
 
 ###############################################################################
@@ -215,6 +212,7 @@ set(SL_TOOLS_INC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tools/include/sl_tools.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tools/include/sl_win_avg.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tools/include/sl_logging.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/tools/include/json.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tools/include/gnss_replay.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tools/include/sl_types.hpp
 )
@@ -264,7 +262,7 @@ target_include_directories(zed_camera_component PUBLIC
     ${CUDA_INCLUDE_DIRS}
     ${ZED_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/src/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/zed_camera/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/zed_camera/include    
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tools/include
 )
 target_compile_definitions(zed_camera_component
@@ -317,7 +315,6 @@ install(TARGETS zed_camera_component zed_camera_one_component
 # Install header files
 install(DIRECTORY
     ${CMAKE_CURRENT_SOURCE_DIR}/src/zed_camera/include/
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/zed_camera_one/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tools/include/
     ${CMAKE_CURRENT_SOURCE_DIR}/src/include/
     DESTINATION include/${PROJECT_NAME}/

@@ -35,8 +35,8 @@ ZedCameraOne::ZedCameraOne(const rclcpp::NodeOptions & options)
   _imuFreqTimer(get_clock()),
   _imuTfFreqTimer(get_clock()),
   _imgPubFreqTimer(get_clock()),
-  _frameTimestamp(TIMEZERO_ROS),
-  _lastTs_imu(TIMEZERO_ROS),
+  _frameTimestamp(_frameTimestamp),
+  _lastTs_imu(_frameTimestamp),
   _colorSubCount(0),
   _colorRawSubCount(0),
   _graySubCount(0),
@@ -308,12 +308,6 @@ void ZedCameraOne::getSvoParams()
       shared_from_this(), "svo.play_from_frame",
       _svoFrameStart, _svoFrameStart,
       " * SVO start frame: ", false, 0);
-
-#if (ZED_SDK_MAJOR_VERSION * 10 + ZED_SDK_MINOR_VERSION) >= 53
-    sl_tools::getParam(
-      shared_from_this(), "svo.decryption_key", std::string(),
-      _svoDecryptionKey);
-#endif
   }
 }
 
@@ -431,10 +425,6 @@ void ZedCameraOne::getResolutionParams()
       _camResol = sl::RESOLUTION::QHDPLUS;
     } else if (resol == "HD1536" && _camUserModel == sl::MODEL::ZED_XONE_HDR) {
       _camResol = sl::RESOLUTION::HD1536;
-#if (ZED_SDK_MAJOR_VERSION * 10 + ZED_SDK_MINOR_VERSION) >= 53
-    } else if (resol == "XVGA" && _camUserModel == sl::MODEL::ZED_XONE_HDR) {
-      _camResol = sl::RESOLUTION::XVGA;
-#endif
     } else if (resol == "HD1200" && _camUserModel != sl::MODEL::ZED_XONE_HDR) {
       _camResol = sl::RESOLUTION::HD1200;
     } else if (resol == "HD1080" && _camUserModel != sl::MODEL::ZED_XONE_HDR) {
@@ -549,35 +539,28 @@ void ZedCameraOne::getAdvancedParams()
   RCLCPP_INFO(get_logger(), "=== ADVANCED parameters ===");
 
   sl_tools::getParam(
-    shared_from_this(), "advanced.change_thread_priority",
-    _changeThreadSched, _changeThreadSched,
-    " * Change thread priority: ");
+    shared_from_this(), "advanced.thread_sched_policy",
+    _threadSchedPolicy, _threadSchedPolicy,
+    " * Thread sched. policy: ");
 
-  if (_changeThreadSched) {
-    sl_tools::getParam(
-      shared_from_this(), "advanced.thread_sched_policy",
-      _threadSchedPolicy, _threadSchedPolicy,
-      " * Thread sched. policy: ");
-
-    if (_threadSchedPolicy == "SCHED_FIFO" || _threadSchedPolicy == "SCHED_RR") {
-      if (!sl_tools::checkRoot()) {
-        RCLCPP_WARN_STREAM(
-          get_logger(),
-          "'sudo' permissions required to set "
-            << _threadSchedPolicy
-            << " thread scheduling policy. Using Linux "
-            "default [SCHED_OTHER]");
-        _threadSchedPolicy = "SCHED_OTHER";
-      } else {
-        sl_tools::getParam(
-          shared_from_this(), "advanced.thread_grab_priority",
-          _threadPrioGrab, _threadPrioGrab,
-          " * Grab thread priority: ");
-        sl_tools::getParam(
-          shared_from_this(), "advanced.thread_sensor_priority",
-          _threadPrioSens, _threadPrioSens,
-          " * Sensors thread priority: ");
-      }
+  if (_threadSchedPolicy == "SCHED_FIFO" || _threadSchedPolicy == "SCHED_RR") {
+    if (!sl_tools::checkRoot()) {
+      RCLCPP_WARN_STREAM(
+        get_logger(),
+        "'sudo' permissions required to set "
+          << _threadSchedPolicy
+          << " thread scheduling policy. Using Linux "
+          "default [SCHED_OTHER]");
+      _threadSchedPolicy = "SCHED_OTHER";
+    } else {
+      sl_tools::getParam(
+        shared_from_this(), "advanced.thread_grab_priority",
+        _threadPrioGrab, _threadPrioGrab,
+        " * Grab thread priority: ");
+      sl_tools::getParam(
+        shared_from_this(), "advanced.thread_sensor_priority",
+        _threadPrioSens, _threadPrioSens,
+        " * Sensors thread priority: ");
     }
   }
 }
@@ -604,10 +587,6 @@ void ZedCameraOne::getDebugParams()
     shared_from_this(), "debug.debug_common", _debugCommon,
     _debugCommon, " * Debug Common: ");
   sl_tools::getParam(
-    shared_from_this(), "debug.debug_dyn_params",
-    _debugDynParams, _debugDynParams,
-    " * Debug Dynamic Parameters: ");
-  sl_tools::getParam(
     shared_from_this(), "debug.debug_video_depth",
     _debugVideoDepth, _debugVideoDepth,
     " * Debug Image/Depth: ");
@@ -632,10 +611,9 @@ void ZedCameraOne::getDebugParams()
     _debugNitros, " * Debug Nitros: ");
 
   // Set debug mode
-
-  _debugMode = _debugCommon || _debugDynParams || _debugVideoDepth ||
-    _debugCamCtrl || _debugSensors || _debugStreaming ||
-    _debugAdvanced || _debugTf || _debugNitros;
+  _debugMode = _debugCommon || _debugVideoDepth || _debugCamCtrl ||
+    _debugSensors || _debugStreaming || _debugAdvanced ||
+    _debugTf || _debugNitros;
 
   if (_debugMode) {
     rcutils_ret_t res = rcutils_logging_set_logger_level(
@@ -659,33 +637,12 @@ void ZedCameraOne::getDebugParams()
     "[ROS2] Using RMW_IMPLEMENTATION "
       << rmw_get_implementation_identifier());
 
-  const char * nitrosReason = "not_available";
-
 #ifdef FOUND_ISAAC_ROS_NITROS
-  nitrosReason = "enabled";
-
   sl_tools::getParam(
     shared_from_this(), "debug.disable_nitros",
     _nitrosDisabled, _nitrosDisabled);
 
-  bool nitrosDisabledByParam = _nitrosDisabled;
-
-  if (nitrosDisabledByParam) {
-    nitrosReason = "param_debug.disable_nitros";
-  }
-
-  if (!_nitrosDisabled && _usingIPC) {
-    RCLCPP_WARN(
-      get_logger(),
-      "NITROS transport is incompatible with ROS 2 Intra-Process Communication "
-      "(IPC). NITROS will be disabled. To use NITROS, launch with "
-      "enable_ipc:=false. NITROS provides its own zero-copy transport, "
-      "so disabling IPC does not reduce performance.");
-    _nitrosDisabled = true;
-    nitrosReason = "auto_disabled_ipc_incompatibility";
-  }
-
-  if (nitrosDisabledByParam) {
+  if (_nitrosDisabled) {
     RCLCPP_WARN(
       get_logger(),
       "NITROS is available, but is disabled by 'debug.disable_nitros'");
@@ -693,13 +650,6 @@ void ZedCameraOne::getDebugParams()
 #else
   _nitrosDisabled = true;  // Force disable NITROS if not available
 #endif
-
-  RCLCPP_DEBUG(
-    get_logger(),
-    "Transport summary: IPC=%s, NITROS=%s, reason=%s",
-    _usingIPC ? "enabled" : "disabled",
-    _nitrosDisabled ? "disabled" : "enabled",
-    nitrosReason);
 }
 
 void ZedCameraOne::initNode()
@@ -889,9 +839,6 @@ void ZedCameraOne::configureZedInput()
     RCLCPP_INFO(get_logger(), "=== SVO OPENING ===");
     _initParams.input.setFromSVOFile(_svoFilepath.c_str());
     _initParams.svo_real_time_mode = _svoRealtime;
-#if (ZED_SDK_MAJOR_VERSION * 10 + ZED_SDK_MINOR_VERSION) >= 53
-    _initParams.svo_decryption_key = _svoDecryptionKey.c_str();
-#endif
     _svoMode = true;
     return;
   }
@@ -1897,55 +1844,46 @@ void ZedCameraOne::threadFunc_zedGrab()
 
 void ZedCameraOne::setupGrabThreadPolicy()
 {
-  if (_changeThreadSched) {
-    DEBUG_STREAM_ADV("Grab thread settings");
-    if (_debugAdvanced) {
-      int policy;
-      sched_param par;
-      if (pthread_getschedparam(pthread_self(), &policy, &par)) {
-        RCLCPP_WARN_STREAM(
-          get_logger(), " ! Failed to get thread policy! - "
-            << std::strerror(errno));
-      } else {
-        DEBUG_STREAM_ADV(
-          " * Default GRAB thread (#"
-            << pthread_self() << ") settings - Policy: "
-            << sl_tools::threadSched2Str(policy).c_str()
-            << " - Priority: " << par.sched_priority);
-      }
-    }
-
+  DEBUG_STREAM_ADV("Grab thread settings");
+  if (_debugAdvanced) {
+    int policy;
     sched_param par;
-    par.sched_priority =
-      (_threadSchedPolicy == "SCHED_FIFO" || _threadSchedPolicy == "SCHED_RR") ?
-      _threadPrioGrab :
-      0;
-    int policy = SCHED_OTHER;
-    if (_threadSchedPolicy == "SCHED_BATCH") {
-      policy = SCHED_BATCH;
-    } else if (_threadSchedPolicy == "SCHED_FIFO") {
-      policy = SCHED_FIFO;
-    } else if (_threadSchedPolicy == "SCHED_RR") {
-      policy = SCHED_RR;
-    }
-    if (pthread_setschedparam(pthread_self(), policy, &par)) {
+    if (pthread_getschedparam(pthread_self(), &policy, &par)) {
       RCLCPP_WARN_STREAM(
-        get_logger(), " ! Failed to set thread params! - "
-          << std::strerror(errno));
+        get_logger(),
+        " ! Failed to get thread policy! - " << std::strerror(errno));
+    } else {
+      DEBUG_STREAM_ADV(
+        " * Default GRAB thread (#" << pthread_self() << ") settings - Policy: "
+                                    << sl_tools::threadSched2Str(
+          policy).c_str() << " - Priority: " << par.sched_priority);
     }
+  }
 
-    if (_debugAdvanced) {
-      if (pthread_getschedparam(pthread_self(), &policy, &par)) {
-        RCLCPP_WARN_STREAM(
-          get_logger(), " ! Failed to get thread policy! - "
-            << std::strerror(errno));
-      } else {
-        DEBUG_STREAM_ADV(
-          " * New GRAB thread (#"
-            << pthread_self() << ") settings - Policy: "
-            << sl_tools::threadSched2Str(policy).c_str()
-            << " - Priority: " << par.sched_priority);
-      }
+  sched_param par;
+  par.sched_priority =
+    (_threadSchedPolicy == "SCHED_FIFO" ||
+    _threadSchedPolicy == "SCHED_RR") ? _threadPrioGrab : 0;
+  int policy = SCHED_OTHER;
+  if (_threadSchedPolicy == "SCHED_BATCH") {
+    policy = SCHED_BATCH;
+  } else if (_threadSchedPolicy == "SCHED_FIFO") {
+    policy = SCHED_FIFO;
+  } else if (_threadSchedPolicy == "SCHED_RR") {policy = SCHED_RR;}
+  if (pthread_setschedparam(pthread_self(), policy, &par)) {
+    RCLCPP_WARN_STREAM(get_logger(), " ! Failed to set thread params! - " << std::strerror(errno));
+  }
+
+  if (_debugAdvanced) {
+    if (pthread_getschedparam(pthread_self(), &policy, &par)) {
+      RCLCPP_WARN_STREAM(
+        get_logger(),
+        " ! Failed to get thread policy! - " << std::strerror(errno));
+    } else {
+      DEBUG_STREAM_ADV(
+        " * New GRAB thread (#" << pthread_self() << ") settings - Policy: "
+                                << sl_tools::threadSched2Str(
+          policy).c_str() << " - Priority: " << par.sched_priority);
     }
   }
 }
@@ -2059,16 +1997,14 @@ bool ZedCameraOne::performCameraGrab()
 
 void ZedCameraOne::updateFrameTimestamp()
 {
-  _sdkGrabTS = _zed->getTimestamp(sl::TIME_REFERENCE::IMAGE);
-
   if (_svoMode) {
     if (_useSvoTimestamp) {
-      _frameTimestamp = sl_tools::slTime2Ros(_sdkGrabTS);
+      _frameTimestamp = sl_tools::slTime2Ros(_zed->getTimestamp(sl::TIME_REFERENCE::IMAGE));
     } else {
       _frameTimestamp = sl_tools::slTime2Ros(_zed->getTimestamp(sl::TIME_REFERENCE::CURRENT));
     }
   } else {
-    _frameTimestamp = sl_tools::slTime2Ros(_sdkGrabTS);
+    _frameTimestamp = sl_tools::slTime2Ros(_zed->getTimestamp(sl::TIME_REFERENCE::IMAGE));
   }
 }
 
@@ -2219,16 +2155,15 @@ void ZedCameraOne::handleStreamingServer()
 
 void ZedCameraOne::handleSvoRecordingStatus()
 {
-  {
-    std::lock_guard<std::mutex> lock(_recMutex);
-    if (_recording) {
-      _recStatus = _zed->getRecordingStatus();
-      if (!_recStatus.status) {
-        rclcpp::Clock steady_clock(RCL_STEADY_TIME);
-        RCLCPP_WARN_THROTTLE(get_logger(), steady_clock, 1000.0, "Error saving frame to SVO");
-      }
+  _recMutex.lock();
+  if (_recording) {
+    _recStatus = _zed->getRecordingStatus();
+    if (!_recStatus.status) {
+      rclcpp::Clock steady_clock(RCL_STEADY_TIME);
+      RCLCPP_WARN_THROTTLE(get_logger(), steady_clock, 1000.0, "Error saving frame to SVO");
     }
   }
+  _recMutex.unlock();
 }
 
 bool ZedCameraOne::startStreamingServer()
