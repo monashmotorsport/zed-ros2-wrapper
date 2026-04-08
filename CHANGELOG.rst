@@ -1,47 +1,6 @@
 LATEST CHANGES
 ==============
 
-v5.2.2
-----------
-- Default Positional Tracking mode changed back to `GEN_1` until the stability and reliability of `GEN_3` is improved. 
-  Users can still select a specific mode by setting the `pos_tracking.pos_tracking_mode` parameter to `GEN_1`, `GEN_2`, or `GEN_3` according to their needs and preferences.
-- Modified node behaviors when Positional Tracking is disabled [`pos_tracking.pos_tracking_enabled: false`]:
-
-  - `publish_tf` is automatically disabled.
-  - The `odom` related topics are no longer advertised.
-  - The `pose` related topics are no longer advertised.
-  - The GNSS fusion is automatically disabled.
-  - The Plane Detection is automatically disabled.
-  - The Positional Tracking services are no longer advertised.
-  - Depth stability follows the ZED SDK behaviors.
-  - Object Tracking follows the ZED SDK behaviors.
-  - Body Tracking follows the ZED SDK behaviors.
-
-- Add new parameter `debug.debug_dyn_params` to enable debug logs for dynamic parameters changes. 
-
-  - Dynamic parameters related logs are now displayed only if the new debug parameter `debug.debug_dyn_params` is set to `true` to avoid log spam when changing dynamic parameters.
-
-v5.2.1
-------
-- Added the parameter `general.grab_compute_capping_fps` to define a computation upper limit to the grab frequency.
-
-  - This can be useful to get a known constant fixed rate or limit the computation load while keeping a short exposure time by setting a high camera capture framerate.
-  - If set to 0, the grab compute capping will be disabled, and the ZED SDK will process data at the grab rate.
-- URDF now belongs to the `zed_description` package, which is now a dependency of the `zed_wrapper` package. This allows to use the URDF files of the ZED ROS2 Wrapper in other packages without depending on the whole wrapper.
-
-  - The `zed_description` is available in binary form for ROS 2 Humble, Jazzy, and Rolling and can be installed with `sudo apt install ros-$ROS_DISTRO-zed-description`
-
-v5.2.0
-------
-- Removed the `zed_wrapper/urdf/include/materials.urdf.xacro` file and moved the material settings directly in the `zed_macro.urdf.xacro` file to avoid possible conflicts in multi-camera configurations. Thx @davesarmoury for the fix
-- Added the `enable_localization_only` parameter to the configuration to allow the camera to localize in the loaded area memory without updating the map with new information.
-- Added support for the ZED SDK Positional Tracking 2D mode if the SDK version is 5.1 or higher.
-- Added the `zed_debug` package for debugging ZED Components by loading them in a single C++ process.
-- Add `enable_depth` service to disable depth processing at runtime
-- Positional Tracking `GEN_3` is now the default mode when using ZED SDK v5.2 or newer, providing improved stability and performance. The `GEN_2` mode is still available as an option for users who prefer it or need it for specific use cases.
-- When using GEN_3 with ZED SDK v5.2 or newer, Positional Tracking continues to provide localization feedback even if depth is disabled at runtime or when the node starts by setting the `depth.depth_mode` parameter to `NONE`.
-- New diagnostic information regarding Positional Tracking status: "Mode", "Odometry Status", "Spatial Memory Status", "Tracking Fusion Status".
-
 v5.1.0
 ------
 - Changed ZED Camera image topic names to match the cleaner convention used by ZED X One cameras:
